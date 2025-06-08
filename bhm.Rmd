@@ -1,0 +1,240 @@
+---
+title: "bhm"
+author: "Jennifer Otiono"
+date: "`r Sys.Date()`"
+output: html_document
+
+#Name: Jennifer Otiono
+#ILRST 2100 - Introduction to Data Science and Statistics
+#Final Project
+
+
+#This is where i got the dataset: https://zenodo.org/records/4650046
+#This is the github with the documentation: https://github.com/epfl-dlab/YouNiverse/tree/master?tab=readme-ov-file
+
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r }
+
+#eCornell Hex Codes: 
+crimson = '#b31b1b'   #crimson
+lightGray = '#cecece' #lightGray
+darkGray = '#606366'  #darkGray
+skyBlue = '#92b2c4'   #skyblue
+gold = '#fbb040'      #gold
+ecBlack = '#393f47'   #ecBlack
+
+
+```
+
+
+
+#----Load Data
+```{r}
+#load dataset
+
+
+library(lubridate)
+
+#load dataset
+
+ts_yt <- read.csv("ts_yt.csv")
+
+
+#number of rows
+nrow(ts_yt)
+
+#header
+head(ts_yt)
+
+```
+
+
+#----------HANDLING DATE OBJECT ------------#
+
+```{r}
+
+#handle date to change label
+ts_yt$datetime <- as.Date(ts_yt$datetime, format = "%m/%d/%Y")
+
+ts_yt$period <- NA
+  
+  
+#check for january
+ts_yt$period[format(ts_yt$datetime, "%m") == "01"] <- "Before Black History Month"
+
+#check for february
+ts_yt$period[format(ts_yt$datetime, "%m") == "02"] <- "Black History Month"
+
+#check for march
+ts_yt$period[format(ts_yt$datetime, "%m") == "03"] <- "Post-Black History Month"
+
+```
+
+
+#----------Univariate Analysis: Summarization and Visualisation------------#
+
+```{r}
+
+#of views - Total number of views the channel had this week.
+summary(ts_yt$views)
+hist(log(ts_yt$views), xlab = "Log of Views", main = "Pre-, During-, Post- Black History Month", breaks = 30)
+
+
+
+# Breaking DOWN analysis to TIME PERIODS
+
+#determine average views for the before black history month period
+before_bhm <-ts_yt[ts_yt$period == "Before Black History Month",]
+average_view_before_bhm <- mean(before_bhm$views)
+average_view_before_bhm
+hist(log(before_bhm$views))
+
+#determine average views for the  black history month period
+during_bhm <-ts_yt[ts_yt$period == "Black History Month",]
+average_view_during_bhm <- mean(during_bhm$views)
+average_view_during_bhm
+hist(log(during_bhm$views))
+
+#determine average views for the after black history month period
+post_bhm <-ts_yt[ts_yt$period == "Post-Black History Month",]
+average_view_post_bhm <- mean(post_bhm$views)
+average_view_post_bhm
+hist(log(post_bhm$views))
+
+```
+
+
+#-------Bivariate Analysis Visualisation: Side-by-Side Boxplots -------------------#
+
+```{r}
+
+boxplot(log(before_bhm$views), log(during_bhm$views), log(post_bhm$views), names = c("Before BHM", "BHM", "Post-BHM"), 
+        ylab = "Density of Views",
+        main = "Differences in the Log of Views by Time Period ")
+
+
+
+
+```
+
+
+#-----uncertainty quantification - permutation tool of two numerical groups------------#
+```{r}
+obs_stat = mean(before_bhm$views, na.rm=TRUE) - mean(post_bhm$views, na.rm=TRUE)
+obs_stat
+
+obs_stat2 = mean(during_bhm$views, na.rm=TRUE) - mean(post_bhm$views, na.rm=TRUE)
+obs_stat2
+
+set.seed(1)
+P = 1000
+store_mean_diff1 = rep(0, P)
+store_mean_diff2 = rep(0, P)
+
+for (n in 1:P){
+  # Create a data set called before_bhm.perm that will be permuted
+  ts_yt_perm = ts_yt
+  
+  # Permute the data set by randomly shuffling prestige values
+  ts_yt_perm$views = sample(ts_yt$views, replace = FALSE)
+  
+  #Split the permuted views by time period (before, during, after BHM)
+  before_views_perm = ts_yt_perm$views[ts_yt_perm$period == "Before Black History Month"]
+  during_views_perm = ts_yt_perm$views[ts_yt_perm$period == "Black History Month"]
+  post_views_perm = ts_yt_perm$views[ts_yt_perm$period == "Post-Black History Month"]
+  
+  #mean differences between the differences before and after, during and after
+  store_mean_diff1[n] = (mean(before_views_perm, na.rm=TRUE) - mean(post_views_perm, na.rm=TRUE)) + 1e-6
+  store_mean_diff2[n] = (mean(during_views_perm, na.rm=TRUE) - mean(post_views_perm, na.rm=TRUE)) + 1e-6
+  
+  #store_mean_diff1[n] = mean(before_views_perm, na.rm=TRUE) - 
+    #mean(during_views_perm, na.rm=TRUE)
+  #store_mean_diff3[n] = mean(during_views_perm, na.rm=TRUE) - 
+    #mean(post_views_perm, na.rm=TRUE)
+}
+
+# Print the mean differences
+#cat("Mean difference (Before vs During):", store_mean_diff1, "\n")
+#cat("Mean difference (During vs After):", store_mean_diff2, "\n")
+
+# Create a boxplot of the permuted data
+boxplot(log(before_views_perm), log(during_views_perm), log(post_views_perm), names = c('before', 'during', 'post'),
+        ylab = 'Views',
+        main = 'Views over Duration (Permuted Data)', col = ecBlack)
+
+#permute the dataset many times and create a histogram of the mean sample statistic
+hist(log(store_mean_diff1), breaks = 20, freq = FALSE, col = ecBlack, border = 'white',
+     xlab = 'Mean Diff of Views',
+     main = 'Histogram of View Diff (Permuted Data)')
+abline(v = obs_stat, col = skyBlue, lwd = 3)
+
+
+
+hist(log(store_mean_diff2), breaks = 20, freq = FALSE, col = ecBlack, border = 'white',
+     xlab = 'Mean Diff of Views',
+     main = 'Histogram of View Diff (Permuted Data)')
+abline(v = obs_stat2, col = skyBlue, lwd = 3)
+
+```
+
+
+#CI
+```{r}
+
+#before - post
+ci.0.025 =quantile(store_mean_diff1, 0.025)
+ci.0.975 =quantile(store_mean_diff1, 0.975)
+
+#during - post
+ci2.0.025 =quantile(store_mean_diff2, 0.025)
+ci2.0.975 =quantile(store_mean_diff2, 0.975)
+
+```
+
+
+# Calculate the p-value:
+
+```{r}
+pvalue = mean(abs(store_mean_diff1) >= abs(obs_stat))
+pvalue
+
+
+```
+
+#-----------------ADVANCED ANALYSIS-------------------------------------------------------#
+
+```{r}
+#One Way ANOVA
+anova_bhm <- aov(views ~ period, data = ts_yt)
+summary(anova_bhm)
+
+```
+
+#--------------------ADVANCED PLOT----------------------------------------------------#
+
+```{r}
+
+library(ggplot2)
+
+ggplot(ts_yt, aes(x = views)) +
+  geom_histogram(bins = 30, fill = "skyblue", color = "black") +
+  facet_grid(period ~ category) +  # Assuming you have a 'category' variable
+  labs(title = "Histogram of Views by Period and Category",
+       x = "Views", y = "Frequency") +
+  theme_minimal()
+```
+
+
+
